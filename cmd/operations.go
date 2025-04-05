@@ -9,7 +9,7 @@ import (
 
 // addNote добавляет новую заметку.
 func addNote(reader *bufio.Reader) {
-	fmt.Println("\n--- Добавление заметки ---")
+	fmt.Println("\n--- Добавление заметки ➕ ---")
 	fmt.Println("0) Назад")
 	fmt.Print("Введите заголовок или 0 - для отмены: ")
 	title, _ := reader.ReadString('\n')
@@ -38,7 +38,7 @@ func addNote(reader *bufio.Reader) {
 
 // editCredentials редактирует логин или пароль заметки.
 func editCredentials(reader *bufio.Reader) {
-	fmt.Println("\n--- Редактирование логина/пароля ---")
+	fmt.Println("\n--- Редактирование заметки ✏️ ---")
 	if len(notes) == 0 {
 		fmt.Println("Список заметок пуст.")
 		return
@@ -96,7 +96,7 @@ func editCredentials(reader *bufio.Reader) {
 
 // deleteNote удаляет заметку по ID и перенумеровывает оставшиеся.
 func deleteNote(reader *bufio.Reader) {
-	fmt.Println("\n--- Удаление заметки ---")
+	fmt.Println("\n--- Удаление заметки ❌ ---")
 	if len(notes) == 0 {
 		fmt.Println("Список заметок пуст.")
 		return
@@ -136,7 +136,7 @@ func reindexNotes() {
 
 // viewNotes отображает заметки в виде таблицы.
 func viewNotes() {
-	fmt.Println("\n--- Список заметок ---")
+	fmt.Println("\n--- Список заметок 👀 ---")
 	if len(notes) == 0 {
 		fmt.Println("Список заметок пуст.")
 		return

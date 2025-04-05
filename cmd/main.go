@@ -65,16 +65,16 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Println("---------------------------")
-		fmt.Println("Выберите действие:")
-		fmt.Println("1) Добавить заметку")
-		fmt.Println("2) Редактировать заметку")
-		fmt.Println("3) Удалить заметку")
-		fmt.Println("4) Посмотреть заметки")
-		fmt.Println("5) Выход")
-		fmt.Println("---------------------------")
+		fmt.Println("\nГлавное меню 📋")
+		fmt.Println("-----------------------------")
+		fmt.Println("1) Добавить заметку ➕")
+		fmt.Println("2) Посмотреть заметки 👀")
+		fmt.Println("3) Редактировать заметку ✏️")
+		fmt.Println("4) Удалить заметку ❌")
+		fmt.Println("5) Выход 🚪")
+		fmt.Println("-----------------------------")
 
-		fmt.Print("Введите номер действия: ")
+		fmt.Print("Выберите действие: ")
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
 
@@ -82,11 +82,11 @@ func main() {
 		case "1":
 			addNote(reader)
 		case "2":
-			editCredentials(reader)
-		case "3":
-			deleteNote(reader)
-		case "4":
 			viewNotes()
+		case "3":
+			editCredentials(reader)
+		case "4":
+			deleteNote(reader)
 		case "5":
 			fmt.Println("Выход из программы.")
 			if err := saveNotesToMarkdown(); err != nil {
