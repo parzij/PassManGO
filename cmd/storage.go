@@ -14,76 +14,56 @@ import (
 	"github.com/yeka/zip"
 )
 
-// saveNotesToMarkdown сохраняет все заметки в защищенный ZIP-архив
+// saveNotesToMarkdown сохраняет все заметки в ZIP‑архив.
+// Если архив уже существует, он перезаписывается на месте (без удаления файла).
 func saveNotesToMarkdown() error {
 	if len(notes) == 0 {
-		return nil // Не сохраняем пустые заметки
+		return nil // Нет данных ‒ ничего не сохраняем
 	}
 
-	// Создаем буфер для Markdown содержимого
+	// Формируем Markdown‑содержимое
 	var buf bytes.Buffer
-
-	// Записываем данные в буфер
-	_, err := buf.WriteString("# Менеджер паролей\n\n")
-	if err != nil {
-		return fmt.Errorf("ошибка при записи в буфер: %v", err)
-	}
-
-	_, err = buf.WriteString(fmt.Sprintf("> Последнее обновление: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
-	if err != nil {
-		return fmt.Errorf("ошибка при записи в буфер: %v", err)
-	}
+	buf.WriteString("# Менеджер паролей\n\n")
+	buf.WriteString(fmt.Sprintf("> Последнее обновление: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
 
 	for _, note := range notes {
-		decryptedPass := note.DecryptPassword()
-		noteContent := fmt.Sprintf("## %s (ID: %d)\n", note.Title, note.ID)
-		noteContent += fmt.Sprintf("- **Логин:** `%s`\n", note.Login)
-		noteContent += fmt.Sprintf("- **Пароль:** `%s`\n", decryptedPass)
-		noteContent += "\n---\n\n"
-		_, err = buf.WriteString(noteContent)
-		if err != nil {
-			return fmt.Errorf("ошибка при записи заметки в буфер: %v", err)
-		}
+		buf.WriteString(fmt.Sprintf("## %s (ID: %d)\n", note.Title, note.ID))
+		buf.WriteString(fmt.Sprintf("- **Логин:** `%s`\n", note.Login))
+		buf.WriteString(fmt.Sprintf("- **Пароль:** `%s`\n", note.DecryptPassword()))
+		buf.WriteString("\n---\n\n")
 	}
 
-	// Создаем защищенный ZIP-архив
-	zipFile, err := os.Create(zipArchive)
+	// Открываем файл архива (создаём, если нет) с перезаписью содержимого
+	f, err := os.OpenFile(zipArchive, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		return fmt.Errorf("ошибка при создании архива: %v", err)
+		return fmt.Errorf("ошибка при открытии/создании архива: %v", err)
 	}
-	defer zipFile.Close()
+	defer f.Close()
 
-	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
+	zw := zip.NewWriter(f)
+	defer zw.Close()
 
 	archivePassword := os.Getenv("ARCHIVE_PASSWORD")
 	if archivePassword == "" {
 		return fmt.Errorf("ARCHIVE_PASSWORD не найден в .env")
 	}
 
-	header := &zip.FileHeader{
-		Name:   filepath.Base(storageFile),
-		Method: zip.Deflate,
-	}
-
-	writer, err := zipWriter.Encrypt(header.Name, archivePassword, zip.AES256Encryption)
+	w, err := zw.Encrypt(filepath.Base(storageFile), archivePassword, zip.AES256Encryption)
 	if err != nil {
 		return fmt.Errorf("ошибка при установке пароля на архив: %v", err)
 	}
 
-	_, err = io.Copy(writer, bytes.NewReader(buf.Bytes()))
-	if err != nil {
+	if _, err = io.Copy(w, bytes.NewReader(buf.Bytes())); err != nil {
 		return fmt.Errorf("ошибка при записи в архив: %v", err)
 	}
 
 	return nil
 }
 
-// loadNotesFromMarkdown загружает заметки из защищенного ZIP-архива
+// loadNotesFromMarkdown загружает заметки из архива (если он существует)
 func loadNotesFromMarkdown() error {
-	// Проверяем, существует ли архив
 	if _, err := os.Stat(zipArchive); os.IsNotExist(err) {
-		return nil // Архив не существует, это нормально
+		return nil // Архива ещё нет ‒ это нормально
 	}
 
 	archivePassword := os.Getenv("ARCHIVE_PASSWORD")
@@ -91,14 +71,12 @@ func loadNotesFromMarkdown() error {
 		return fmt.Errorf("ARCHIVE_PASSWORD не найден в .env")
 	}
 
-	// Открываем ZIP-архив
 	r, err := zip.OpenReader(zipArchive)
 	if err != nil {
 		return fmt.Errorf("ошибка при открытии архива: %v", err)
 	}
 	defer r.Close()
 
-	// Ищем наш файл в архиве
 	var file *zip.File
 	for _, f := range r.File {
 		if f.Name == filepath.Base(storageFile) {
@@ -106,72 +84,50 @@ func loadNotesFromMarkdown() error {
 			break
 		}
 	}
-
 	if file == nil {
 		return fmt.Errorf("файл %s не найден в архиве", storageFile)
 	}
 
-	// Устанавливаем пароль для файла
 	file.SetPassword(archivePassword)
-
-	// Открываем файл в архиве
 	rc, err := file.Open()
 	if err != nil {
 		return fmt.Errorf("ошибка при открытии файла в архиве: %v", err)
 	}
 	defer rc.Close()
 
-	// Читаем содержимое файла
 	scanner := bufio.NewScanner(rc)
-	var currentNote *Note
-	notes = []Note{} // Очищаем текущие заметки
+	var current *Note
+	notes = []Note{}
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "## ") {
-			if currentNote != nil {
-				notes = append(notes, *currentNote)
+		switch {
+		case strings.HasPrefix(line, "## "):
+			if current != nil {
+				notes = append(notes, *current)
 			}
-			// Парсим заголовок и ID: "## Title (ID: id)"
 			start := len("## ")
 			end := strings.Index(line, " (ID: ")
 			if end == -1 {
 				continue
 			}
 			title := line[start:end]
-			idStr := line[end+len(" (ID: ") : len(line)-1] // Убираем ")"
-			id, err := strconv.Atoi(idStr)
-			if err != nil {
-				continue
-			}
-			currentNote = &Note{ID: id, Title: title}
-		} else if strings.HasPrefix(line, "- **Логин:** `") && currentNote != nil {
-			start := len("- **Логин:** `")
-			end := strings.LastIndex(line, "`")
-			if end == -1 {
-				continue
-			}
-			currentNote.Login = line[start:end]
-		} else if strings.HasPrefix(line, "- **Пароль:** `") && currentNote != nil {
-			start := len("- **Пароль:** `")
-			end := strings.LastIndex(line, "`")
-			if end == -1 {
-				continue
-			}
-			plainPass := line[start:end]
-			currentNote.EncryptPassword(plainPass)
-		} else if line == "---" && currentNote != nil {
-			notes = append(notes, *currentNote)
-			currentNote = nil
+			idStr := line[end+len(" (ID: ") : len(line)-1]
+			id, _ := strconv.Atoi(idStr)
+			current = &Note{ID: id, Title: title}
+		case strings.HasPrefix(line, "- **Логин:** `") && current != nil:
+			current.Login = strings.TrimSuffix(strings.TrimPrefix(line, "- **Логин:** `"), "`")
+		case strings.HasPrefix(line, "- **Пароль:** `") && current != nil:
+			pass := strings.TrimSuffix(strings.TrimPrefix(line, "- **Пароль:** `"), "`")
+			current.EncryptPassword(pass)
+		case line == "---" && current != nil:
+			notes = append(notes, *current)
+			current = nil
 		}
 	}
-
-	if currentNote != nil {
-		notes = append(notes, *currentNote)
+	if current != nil {
+		notes = append(notes, *current)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("ошибка при чтении файла: %v", err)
-	}
-	return nil
+	return scanner.Err()
 }
