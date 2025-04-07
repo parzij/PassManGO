@@ -5,50 +5,112 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"unicode"
 )
 
-// addNote добавляет новую заметку.
 func addNote(reader *bufio.Reader) {
-	fmt.Println("\n--- Добавление заметки ➕ ---")
-	fmt.Println("0) Назад")
-	fmt.Print("Введите заголовок или 0 - для отмены: ")
+	fmt.Println(greenText("\n--- Добавление заметки ➕ ---"))
+	fmt.Println(redText("0) Назад"))
+	fmt.Print(greenText("Введите заголовок или 0 - для отмены: "))
 	title, _ := reader.ReadString('\n')
 	title = strings.TrimSpace(title)
 	if title == "0" {
 		return
 	}
 
-	fmt.Print("Введите логин: ")
+	fmt.Print(greenText("Введите логин: "))
 	login, _ := reader.ReadString('\n')
 	login = strings.TrimSpace(login)
 
-	fmt.Print("Введите пароль: ")
+	fmt.Print(greenText("Введите пароль: "))
 	pass, _ := reader.ReadString('\n')
 	pass = strings.TrimSpace(pass)
+
+	strength := evaluatePasswordStrength(pass)
+	fmt.Printf("%sОценка сложности пароля: %s%s\n", colorGreen, strength, colorReset)
 
 	note := Note{ID: len(notes) + 1, Title: title, Login: login}
 	note.EncryptPassword(pass)
 	notes = append(notes, note)
-	fmt.Printf("Заметка с ID=%d успешно добавлена!\n", note.ID)
+	fmt.Printf(greenText("Заметка с ID=%d успешно добавлена!\n"), note.ID)
 
 	if err := saveNotesToMarkdown(); err != nil {
-		log.Println("Ошибка при сохранении заметок:", err)
+		log.Println(redText("Ошибка при сохранении заметок:"), err)
 	}
 }
 
-// editCredentials редактирует логин или пароль заметки.
+func evaluatePasswordStrength(password string) string {
+	if len(password) == 0 {
+		return redText("❌ Пустой пароль")
+	}
+
+	var (
+		hasUpper   bool
+		hasLower   bool
+		hasNumber  bool
+		hasSpecial bool
+		length     = len(password)
+		score      int
+	)
+
+	for _, char := range password {
+		switch {
+		case unicode.IsUpper(char):
+			hasUpper = true
+		case unicode.IsLower(char):
+			hasLower = true
+		case unicode.IsNumber(char):
+			hasNumber = true
+		case unicode.IsPunct(char) || unicode.IsSymbol(char):
+			hasSpecial = true
+		}
+	}
+
+	if length > 12 {
+		score += 3
+	} else if length > 8 {
+		score += 2
+	} else if length > 5 {
+		score += 1
+	}
+
+	if hasUpper {
+		score++
+	}
+	if hasLower {
+		score++
+	}
+	if hasNumber {
+		score++
+	}
+	if hasSpecial {
+		score++
+	}
+
+	switch {
+	case score >= 7:
+		return greenText("🔒 Очень сильный")
+	case score >= 5:
+		return greenText("🔐 Сильный")
+	case score >= 3:
+		return yellowText("⚠️ Средний")
+	default:
+		return redText("❌ Слабый")
+	}
+}
+
 func editCredentials(reader *bufio.Reader) {
-	fmt.Println("\n--- Редактирование заметки ✏️ ---")
+	fmt.Println(greenText("\n--- Редактирование заметки ✏️ ---"))
 	if len(notes) == 0 {
-		fmt.Println("Список заметок пуст.")
+		fmt.Println(redText("Список заметок пуст."))
 		return
 	}
 
-	fmt.Print("Введите ID заметки (или 0 для отмены): ")
+	fmt.Print(greenText("Введите ID заметки (или 0 для отмены): "))
 	var id int
 	_, err := fmt.Scanf("%d\n", &id)
 	if err != nil {
-		fmt.Println("Ошибка ввода ID:", err)
+		fmt.Println(redText("Ошибка ввода ID:"), err)
 		return
 	}
 	if id == 0 {
@@ -57,12 +119,12 @@ func editCredentials(reader *bufio.Reader) {
 
 	for i, note := range notes {
 		if note.ID == id {
-			fmt.Printf("Текущий логин: %s\n", note.Login)
-			fmt.Printf("Текущий пароль: %s\n", note.DecryptPassword())
-			fmt.Println("0) Назад")
-			fmt.Println("1) Логин")
-			fmt.Println("2) Пароль")
-			fmt.Print("Введите номер выбора: ")
+			fmt.Printf(greenText("Текущий логин: %s\n"), note.Login)
+			fmt.Printf(greenText("Текущий пароль: %s\n"), note.DecryptPassword())
+			fmt.Println(redText("0) Назад"))
+			fmt.Println(greenText("1) Логин"))
+			fmt.Println(greenText("2) Пароль"))
+			fmt.Print(greenText("Введите номер выбора: "))
 			selection, _ := reader.ReadString('\n')
 			selection = strings.TrimSpace(selection)
 
@@ -72,41 +134,42 @@ func editCredentials(reader *bufio.Reader) {
 
 			switch selection {
 			case "1":
-				fmt.Print("Введите новый логин: ")
+				fmt.Print(greenText("Введите новый логин: "))
 				newLogin, _ := reader.ReadString('\n')
 				notes[i].Login = strings.TrimSpace(newLogin)
-				fmt.Println("Логин успешно изменён!")
+				fmt.Println(greenText("Логин успешно изменён!"))
 			case "2":
-				fmt.Print("Введите новый пароль: ")
+				fmt.Print(greenText("Введите новый пароль: "))
 				newPass, _ := reader.ReadString('\n')
 				notes[i].EncryptPassword(strings.TrimSpace(newPass))
-				fmt.Println("Пароль успешно изменён!")
+				strength := evaluatePasswordStrength(notes[i].DecryptPassword())
+				fmt.Printf("%sОценка сложности нового пароля: %s%s\n", colorGreen, strength, colorReset)
+				fmt.Println(greenText("Пароль успешно изменён!"))
 			default:
-				fmt.Println("Неверный выбор.")
+				fmt.Println(redText("Неверный выбор."))
 				return
 			}
 			if err := saveNotesToMarkdown(); err != nil {
-				log.Println("Ошибка при сохранении заметок:", err)
+				log.Println(redText("Ошибка при сохранении заметок:"), err)
 			}
 			return
 		}
 	}
-	fmt.Println("Заметка с таким ID не найдена.")
+	fmt.Println(redText("Заметка с таким ID не найдена."))
 }
 
-// deleteNote удаляет заметку по ID и перенумеровывает оставшиеся.
 func deleteNote(reader *bufio.Reader) {
-	fmt.Println("\n--- Удаление заметки ❌ ---")
+	fmt.Println(greenText("\n--- Удаление заметки ❌ ---"))
 	if len(notes) == 0 {
-		fmt.Println("Список заметок пуст.")
+		fmt.Println(redText("Список заметок пуст."))
 		return
 	}
 
-	fmt.Print("Введите ID заметки или 0 - для отмены: ")
+	fmt.Print(greenText("Введите ID заметки или 0 - для отмены: "))
 	var id int
 	_, err := fmt.Scanf("%d\n", &id)
 	if err != nil {
-		fmt.Println("Ошибка ввода ID:", err)
+		fmt.Println(redText("Ошибка ввода ID:"), err)
 		return
 	}
 	if id == 0 {
@@ -117,39 +180,37 @@ func deleteNote(reader *bufio.Reader) {
 		if note.ID == id {
 			notes = append(notes[:i], notes[i+1:]...)
 			reindexNotes()
-			fmt.Printf("Заметка с ID=%d удалена.\n", id)
+			fmt.Printf(greenText("Заметка с ID=%d удалена.\n"), id)
 			if err := saveNotesToMarkdown(); err != nil {
-				log.Println("Ошибка при сохранении заметок:", err)
+				log.Println(redText("Ошибка при сохранении заметок:"), err)
 			}
 			return
 		}
 	}
-	fmt.Println("Заметка с таким ID не найдена.")
+	fmt.Println(redText("Заметка с таким ID не найдена."))
 }
 
-// reindexNotes перенумеровывает ID заметок.
 func reindexNotes() {
 	for i := range notes {
 		notes[i].ID = i + 1
 	}
 }
 
-// viewNotes отображает заметки в виде таблицы.
 func viewNotes() {
-	fmt.Println("\n--- Список заметок 👀 ---")
+	fmt.Println(greenText("\n--- Список заметок 👀 ---"))
 	if len(notes) == 0 {
-		fmt.Println("Список заметок пуст.")
+		fmt.Println(redText("Список заметок пуст."))
 		return
 	}
 
 	const tableWidth = 86
-	fmt.Println(strings.Repeat("-", tableWidth))
-	fmt.Printf("| %-3s | %-20s | %-30s | %-20s |\n", "№", "Заголовок", "Логин", "Пароль")
-	fmt.Println(strings.Repeat("-", tableWidth))
+	fmt.Println(greenText(strings.Repeat("-", tableWidth)))
+	fmt.Printf(greenText("| %-3s | %-20s | %-30s | %-20s |\n"), "№", "Заголовок", "Логин", "Пароль")
+	fmt.Println(greenText(strings.Repeat("-", tableWidth)))
 
 	for _, note := range notes {
-		fmt.Printf("| %-3d | %-20s | %-30s | %-20s |\n",
+		fmt.Printf(greenText("| %-3d | %-20s | %-30s | %-20s |\n"),
 			note.ID, note.Title, note.Login, note.DecryptPassword())
 	}
-	fmt.Println(strings.Repeat("-", tableWidth))
+	fmt.Println(greenText(strings.Repeat("-", tableWidth)))
 }

@@ -7,7 +7,6 @@ import (
 	"io"
 )
 
-// encrypt шифрует данные (AES‑256). Ключ должен быть длиной 32 байта.
 func encrypt(plaintext []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -23,7 +22,6 @@ func encrypt(plaintext []byte, key []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// decrypt расшифровывает данные (AES‑256). Ключ должен быть длиной 32 байта.
 func decrypt(ciphertext []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {

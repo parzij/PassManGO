@@ -14,14 +14,11 @@ import (
 	"github.com/yeka/zip"
 )
 
-// saveNotesToMarkdown сохраняет все заметки в ZIP‑архив.
-// Если архив уже существует, он перезаписывается на месте (без удаления файла).
 func saveNotesToMarkdown() error {
 	if len(notes) == 0 {
-		return nil // Нет данных ‒ ничего не сохраняем
+		return nil
 	}
 
-	// Формируем Markdown‑содержимое
 	var buf bytes.Buffer
 	buf.WriteString("# Менеджер паролей\n\n")
 	buf.WriteString(fmt.Sprintf("> Последнее обновление: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
@@ -33,10 +30,9 @@ func saveNotesToMarkdown() error {
 		buf.WriteString("\n---\n\n")
 	}
 
-	// Открываем файл архива (создаём, если нет) с перезаписью содержимого
 	f, err := os.OpenFile(zipArchive, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		return fmt.Errorf("ошибка при открытии/создании архива: %v", err)
+		return fmt.Errorf("%sошибка при открытии/создании архива: %v%s", colorRed, err, colorReset)
 	}
 	defer f.Close()
 
@@ -45,35 +41,34 @@ func saveNotesToMarkdown() error {
 
 	archivePassword := os.Getenv("ARCHIVE_PASSWORD")
 	if archivePassword == "" {
-		return fmt.Errorf("ARCHIVE_PASSWORD не найден в .env")
+		return fmt.Errorf("%sARCHIVE_PASSWORD не найден в .env%s", colorRed, colorReset)
 	}
 
 	w, err := zw.Encrypt(filepath.Base(storageFile), archivePassword, zip.AES256Encryption)
 	if err != nil {
-		return fmt.Errorf("ошибка при установке пароля на архив: %v", err)
+		return fmt.Errorf("%sошибка при установке пароля на архив: %v%s", colorRed, err, colorReset)
 	}
 
 	if _, err = io.Copy(w, bytes.NewReader(buf.Bytes())); err != nil {
-		return fmt.Errorf("ошибка при записи в архив: %v", err)
+		return fmt.Errorf("%sошибка при записи в архив: %v%s", colorRed, err, colorReset)
 	}
 
 	return nil
 }
 
-// loadNotesFromMarkdown загружает заметки из архива (если он существует)
 func loadNotesFromMarkdown() error {
 	if _, err := os.Stat(zipArchive); os.IsNotExist(err) {
-		return nil // Архива ещё нет ‒ это нормально
+		return nil
 	}
 
 	archivePassword := os.Getenv("ARCHIVE_PASSWORD")
 	if archivePassword == "" {
-		return fmt.Errorf("ARCHIVE_PASSWORD не найден в .env")
+		return fmt.Errorf("%sARCHIVE_PASSWORD не найден в .env%s", colorRed, colorReset)
 	}
 
 	r, err := zip.OpenReader(zipArchive)
 	if err != nil {
-		return fmt.Errorf("ошибка при открытии архива: %v", err)
+		return fmt.Errorf("%sошибка при открытии архива: %v%s", colorRed, err, colorReset)
 	}
 	defer r.Close()
 
@@ -85,13 +80,13 @@ func loadNotesFromMarkdown() error {
 		}
 	}
 	if file == nil {
-		return fmt.Errorf("файл %s не найден в архиве", storageFile)
+		return fmt.Errorf("%sфайл %s не найден в архиве%s", colorRed, storageFile, colorReset)
 	}
 
 	file.SetPassword(archivePassword)
 	rc, err := file.Open()
 	if err != nil {
-		return fmt.Errorf("ошибка при открытии файла в архиве: %v", err)
+		return fmt.Errorf("%sошибка при открытии файла в архиве: %v%s", colorRed, err, colorReset)
 	}
 	defer rc.Close()
 
@@ -113,7 +108,10 @@ func loadNotesFromMarkdown() error {
 			}
 			title := line[start:end]
 			idStr := line[end+len(" (ID: ") : len(line)-1]
-			id, _ := strconv.Atoi(idStr)
+			id, err := strconv.Atoi(idStr)
+			if err != nil {
+				continue
+			}
 			current = &Note{ID: id, Title: title}
 		case strings.HasPrefix(line, "- **Логин:** `") && current != nil:
 			current.Login = strings.TrimSuffix(strings.TrimPrefix(line, "- **Логин:** `"), "`")
@@ -129,5 +127,9 @@ func loadNotesFromMarkdown() error {
 		notes = append(notes, *current)
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("%sошибка при сканировании файла: %v%s", colorRed, err, colorReset)
+	}
+
+	return nil
 }

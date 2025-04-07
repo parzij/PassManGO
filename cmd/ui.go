@@ -10,7 +10,6 @@ import (
 	"golang.org/x/term"
 )
 
-// readPasswordWithStars считывает пароль, отображая звездочки.
 func readPasswordWithStars() (string, error) {
 	oldState, err := term.MakeRaw(int(syscall.Stdin))
 	if err != nil {
@@ -39,7 +38,7 @@ func readPasswordWithStars() (string, error) {
 		}
 		if unicode.IsPrint(char) {
 			password = append(password, char)
-			fmt.Print("*")
+			fmt.Print(greenText("*"))
 		}
 	}
 	return string(password), nil

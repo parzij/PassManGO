@@ -5,15 +5,13 @@ import (
 	"log"
 )
 
-// Note - структура для хранения заметок.
 type Note struct {
 	ID    int    `json:"id"`
 	Title string `json:"title"`
 	Login string `json:"login"`
-	Pass  string `json:"pass"` // хранится в hex-кодировке
+	Pass  string `json:"pass"`
 }
 
-// EncryptPassword шифрует пароль и сохраняет его в hex-формате.
 func (n *Note) EncryptPassword(plainPass string) {
 	if plainPass == "" {
 		n.Pass = ""
@@ -21,26 +19,25 @@ func (n *Note) EncryptPassword(plainPass string) {
 	}
 	enc, err := encrypt([]byte(plainPass), encryptionKey)
 	if err != nil {
-		log.Println("Ошибка шифрования пароля:", err)
+		log.Println(redText("Ошибка шифрования пароля:"), err)
 		n.Pass = ""
 		return
 	}
 	n.Pass = hex.EncodeToString(enc)
 }
 
-// DecryptPassword расшифровывает пароль из hex-формата.
 func (n *Note) DecryptPassword() string {
 	if n.Pass == "" {
 		return ""
 	}
 	encBytes, err := hex.DecodeString(n.Pass)
 	if err != nil {
-		log.Println("Ошибка hex-декодирования:", err)
+		log.Println(redText("Ошибка hex-декодирования:"), err)
 		return ""
 	}
 	dec, err := decrypt(encBytes, encryptionKey)
 	if err != nil {
-		log.Println("Ошибка расшифрования:", err)
+		log.Println(redText("Ошибка расшифрования:"), err)
 		return ""
 	}
 	return string(dec)
