@@ -14,16 +14,25 @@ import (
 	"github.com/yeka/zip"
 )
 
+// saveNotesToMarkdown сохраняет заметки (и избранные) в зашифрованный zip-архив
+// (пароль совпадает с APP_PASSWORD)
 func saveNotesToMarkdown() error {
-	if len(notes) == 0 {
-		return nil
-	}
-
 	var buf bytes.Buffer
 	buf.WriteString("# Менеджер паролей\n\n")
 	buf.WriteString(fmt.Sprintf("> Последнее обновление: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
 
+	// Сохраняем обычные заметки
 	for _, note := range notes {
+		buf.WriteString(fmt.Sprintf("## %s (ID: %d)\n", note.Title, note.ID))
+		buf.WriteString(fmt.Sprintf("- **Логин:** `%s`\n", note.Login))
+		buf.WriteString(fmt.Sprintf("- **Пароль:** `%s`\n", note.DecryptPassword()))
+		buf.WriteString(fmt.Sprintf("- **Избранное:** `%t`\n", note.Favorite))
+		buf.WriteString("\n---\n\n")
+	}
+
+	// Сохраняем избранные отдельно
+	buf.WriteString("# Избранные заметки ⭐\n\n")
+	for _, note := range favorites {
 		buf.WriteString(fmt.Sprintf("## %s (ID: %d)\n", note.Title, note.ID))
 		buf.WriteString(fmt.Sprintf("- **Логин:** `%s`\n", note.Login))
 		buf.WriteString(fmt.Sprintf("- **Пароль:** `%s`\n", note.DecryptPassword()))
@@ -56,6 +65,7 @@ func saveNotesToMarkdown() error {
 	return nil
 }
 
+// loadNotesFromMarkdown загружает заметки (и избранные) из зашифрованного zip-архива
 func loadNotesFromMarkdown() error {
 	if _, err := os.Stat(zipArchive); os.IsNotExist(err) {
 		return nil
@@ -93,13 +103,20 @@ func loadNotesFromMarkdown() error {
 	scanner := bufio.NewScanner(rc)
 	var current *Note
 	notes = []Note{}
+	favorites = []Note{}
+	inFavoritesSection := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		switch {
 		case strings.HasPrefix(line, "## "):
+			// Сохраняем предыдущую заметку, если она была
 			if current != nil {
-				notes = append(notes, *current)
+				if inFavoritesSection {
+					favorites = append(favorites, *current)
+				} else {
+					notes = append(notes, *current)
+				}
 			}
 			start := len("## ")
 			end := strings.Index(line, " (ID: ")
@@ -113,18 +130,40 @@ func loadNotesFromMarkdown() error {
 				continue
 			}
 			current = &Note{ID: id, Title: title}
+
 		case strings.HasPrefix(line, "- **Логин:** `") && current != nil:
 			current.Login = strings.TrimSuffix(strings.TrimPrefix(line, "- **Логин:** `"), "`")
+
 		case strings.HasPrefix(line, "- **Пароль:** `") && current != nil:
 			pass := strings.TrimSuffix(strings.TrimPrefix(line, "- **Пароль:** `"), "`")
 			current.EncryptPassword(pass)
+
+		case strings.HasPrefix(line, "- **Избранное:** `") && current != nil:
+			fav, err := strconv.ParseBool(strings.TrimSuffix(strings.TrimPrefix(line, "- **Избранное:** `"), "`"))
+			if err == nil {
+				current.Favorite = fav
+			}
+
+		case strings.Contains(line, "# Избранные заметки ⭐"):
+			inFavoritesSection = true
+
 		case line == "---" && current != nil:
-			notes = append(notes, *current)
+			// Добавляем текущую заметку в нужный список
+			if inFavoritesSection {
+				favorites = append(favorites, *current)
+			} else {
+				notes = append(notes, *current)
+			}
 			current = nil
 		}
 	}
+	// Добавляем последнюю считанную заметку
 	if current != nil {
-		notes = append(notes, *current)
+		if inFavoritesSection {
+			favorites = append(favorites, *current)
+		} else {
+			notes = append(notes, *current)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {

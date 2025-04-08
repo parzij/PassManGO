@@ -10,6 +10,7 @@ import (
 	"golang.org/x/term"
 )
 
+// readPasswordWithStars считывает пароль, маскируя символы звёздочками
 func readPasswordWithStars() (string, error) {
 	oldState, err := term.MakeRaw(int(syscall.Stdin))
 	if err != nil {
@@ -29,6 +30,7 @@ func readPasswordWithStars() (string, error) {
 			fmt.Println()
 			break
 		}
+		// Обработка backspace
 		if char == 127 || char == '\b' {
 			if len(password) > 0 {
 				password = password[:len(password)-1]
@@ -38,6 +40,7 @@ func readPasswordWithStars() (string, error) {
 		}
 		if unicode.IsPrint(char) {
 			password = append(password, char)
+			// Печатаем звёздочку
 			fmt.Print(greenText("*"))
 		}
 	}
