@@ -29,10 +29,8 @@ var (
 )
 
 func main() {
-	// Инициализация таймеров автоматического закрытия
 	initShutdownTimers()
 
-	// При выходе останавливаем таймеры
 	defer func() {
 		if shutdownTimer != nil {
 			shutdownTimer.Stop()
@@ -42,13 +40,10 @@ func main() {
 		}
 	}()
 
-	// Проверяем конфигурацию и, при необходимости, создаём её
 	firstRun, appPassword := ensureConfig()
 
-	// Если это не первый запуск - просим пользователя ввести пароль
 	if !firstRun {
 		for {
-			// Проверяем, не заблокирована ли система
 			if checkBlocked() {
 				continue
 			}
@@ -60,7 +55,7 @@ func main() {
 				continue
 			}
 			if input == appPassword {
-				failedAttempts = 0 // сброс счетчика неудачных попыток
+				failedAttempts = 0
 				break
 			}
 			failedAttempts++
@@ -69,7 +64,6 @@ func main() {
 		}
 	}
 
-	// Автоматическая загрузка заметок при старте
 	if err := loadNotesFromMarkdown(); err != nil {
 		log.Println(redText("Ошибка при загрузке заметок:"), err)
 	} else if len(notes) > 0 {
@@ -80,7 +74,7 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		resetShutdownTimer() // Сбрасываем таймер при каждом действии пользователя
+		resetShutdownTimer()
 
 		fmt.Println(greenText("\nГлавное меню 📋"))
 		fmt.Println(greenText("-----------------------------"))
@@ -99,7 +93,6 @@ func main() {
 		case "1":
 			addNote(reader)
 		case "2":
-			// Вызов под-меню для просмотра заметок (все/избранные)
 			viewNotesMenu(reader)
 		case "3":
 			editCredentials(reader)
@@ -119,8 +112,7 @@ func main() {
 
 // initShutdownTimers инициализирует таймеры для автоматического выхода
 func initShutdownTimers() {
-	// Таймер полного завершения (через 10 минут)
-	shutdownTimer = time.AfterFunc(10*time.Minute, func() {
+	shutdownTimer = time.AfterFunc(3*time.Minute, func() {
 		fmt.Println(redText("Программа закрывается автоматически из-за бездействия."))
 		if err := saveNotesToMarkdown(); err != nil {
 			log.Println(redText("Ошибка при сохранении заметок:"), err)
@@ -128,8 +120,7 @@ func initShutdownTimers() {
 		os.Exit(0)
 	})
 
-	// Таймер предупреждения (за 1 минуту до завершения)
-	warningTimer = time.AfterFunc(9*time.Minute, func() {
+	warningTimer = time.AfterFunc(2*time.Minute, func() {
 		fmt.Println(yellowText("Предупреждение: через 1 минуту программа будет закрыта за бездействие!"))
 	})
 }
@@ -142,7 +133,6 @@ func resetShutdownTimer() {
 	if warningTimer != nil {
 		warningTimer.Stop()
 	}
-	// Запускаем их заново
 	initShutdownTimers()
 }
 
@@ -173,7 +163,6 @@ func checkBlocked() bool {
 		return true
 	}
 
-	// Если блокировка истекла, сбрасываем счётчик после 5 минут (при попытке снова ввести пароль)
 	if failedAttempts >= 8 && elapsed >= 5*time.Minute {
 		failedAttempts = 0
 	}

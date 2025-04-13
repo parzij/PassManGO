@@ -63,10 +63,8 @@ func viewNotesMenu(reader *bufio.Reader) {
 		case "0":
 			return
 		case "1":
-			// Просмотр избранных заметок
 			viewNotes(reader, true)
 		case "2":
-			// Просмотр всех заметок
 			viewNotes(reader, false)
 		default:
 			fmt.Println(redText("Неверный выбор, повторите ввод."))
@@ -122,7 +120,6 @@ func viewNotes(reader *bufio.Reader, showFavorites bool) {
 			return
 		}
 
-		// Удаляем из избранного
 		removeFromFavorites(id)
 		fmt.Printf(greenText("Заметка с ID=%d удалена из избранного\n"), id)
 

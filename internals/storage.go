@@ -15,7 +15,6 @@ import (
 )
 
 // saveNotesToMarkdown сохраняет заметки (и избранные) в зашифрованный zip-архив
-// (пароль совпадает с APP_PASSWORD)
 func saveNotesToMarkdown() error {
 	var buf bytes.Buffer
 	buf.WriteString("# Менеджер паролей\n\n")
@@ -110,7 +109,6 @@ func loadNotesFromMarkdown() error {
 		line := scanner.Text()
 		switch {
 		case strings.HasPrefix(line, "## "):
-			// Сохраняем предыдущую заметку, если она была
 			if current != nil {
 				if inFavoritesSection {
 					favorites = append(favorites, *current)
