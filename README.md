@@ -8,13 +8,24 @@
 
 ```
 /PassManGO
-├── main.go         # Точка входа, инициализация и главное меню
-├── auth.go         # Аутентификация пользователя
-├── crypto.go       # Шифрование AES-256 и работа с ключами
-├── models.go       # Структуры данных (Note) и бизнес-логика
-├── storage.go      # Сохранение/загрузка заметок в Markdown
-├── ui.go           # Пользовательский интерфейс (ввод с маскировкой)
-└── go.mod          # Зависимости проекта
+├── main.go             # Точка входа, главное меню и конфигурация
+├── go.mod              # Зависимости проекта
+├── .env.example        # Конфигурация
+├── passwords.zip       # Зашифрованное хранилище заметок
+│
+└── internal/           # Внутренние пакеты
+├── colors/             # Цвета и форматирование вывода
+│   └── colors.go
+├── crypto/             # Шифрование AES
+│   └── crypto.go
+├── note/               # Структура Note
+│   └── note.go
+├── operations/         # Бизнес-логика
+│   └── operations.go
+├── storage/            # Сохранение и загрузка из zip-архива
+│   └── storage.go
+└── tui/                # Пользовательский интерфейс
+└── ui.go
 ```
 ---
 
@@ -46,71 +57,112 @@
 
 ### 1. Ввод мастер-пароля с маской
 
-```
-func readPasswordWithStars() (string, error) {
-	oldState, _ := term.MakeRaw(int(syscall.Stdin))
-	defer term.Restore(int(syscall.Stdin), oldState)
+```go
+// internal/tui/ui.go
+func ReadPasswordWithStars() (string, error) {
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return "", err
+	}
+	defer term.Restore(fd, oldState)
+
 	var password []rune
 	reader := bufio.NewReader(os.Stdin)
 
+	fmt.Print(colors.GreenText("Введите пароль 🔑: "))
+
 	for {
-		char, _, _ := reader.ReadRune()
-		if char == '\r' || char == '\n' {
+		char, _, err := reader.ReadRune()
+		if err != nil {
+			return "", err
+		}
+
+		if char == '\n' || char == '\r' {
 			fmt.Println()
 			break
 		}
-		if char == 127 || char == '\b' {
+
+		if char == 127 || char == '\b' { // Backspace
 			if len(password) > 0 {
 				password = password[:len(password)-1]
 				fmt.Print("\b \b")
 			}
 			continue
 		}
+
 		if unicode.IsPrint(char) {
 			password = append(password, char)
-			fmt.Print("*")
+			fmt.Print(colors.GreenText("*"))
 		}
 	}
+
 	return string(password), nil
 }
 ```
 
-🔸 **Назначение:** безопасный ввод пароля с заменой символов на `*`.
+🔸 Назначение: Безопасный маскированный ввод пароля в терминале с поддержкой Backspace и цветным оформлением.
 
----
+### 2. Шифрование и расшифровка данных
+```go
+// internal/crypto/crypto.go
+func Encrypt(plaintext []byte, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
 
-### 2. Шифрование и расшифровка паролей
-
-```
-func encrypt(plaintext []byte, key []byte) ([]byte, error) {
-	block, _ := aes.NewCipher(key)
 	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
 	iv := ciphertext[:aes.BlockSize]
-	io.ReadFull(rand.Reader, iv)
+
+	// Генерируем случайный Initialization Vector
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return nil, err
+	}
+
 	stream := cipher.NewCFBEncrypter(block, iv)
 	stream.XORKeyStream(ciphertext[aes.BlockSize:], plaintext)
 	return ciphertext, nil
 }
-```
 
-🔸 **Назначение:** защищает пароли, храня их в зашифрованном виде в памяти или файле.
+func Decrypt(ciphertext []byte, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
 
----
+	iv := ciphertext[:aes.BlockSize]
+	ciphertext = ciphertext[aes.BlockSize:]
 
-### 3. Работа с заметками
+	stream := cipher.NewCFBDecrypter(block, iv)
+	plaintext := make([]byte, len(ciphertext))
+	stream.XORKeyStream(plaintext, ciphertext)
 
-```
-type Note struct {
-	ID    int
-	Title string
-	Login string
-	Pass  string // Зашифрованный hex-пароль
-	Text  string
+	return plaintext, nil
 }
 ```
 
-- Каждая заметка имеет свой ID, заголовок, логин, зашифрованный пароль и текст.
-- После удаления заметки ID автоматически перенумеровываются.
+🔸 Назначение: Надёжное AES-CFB шифрование всех чувствительных данных (пароли и заголовки заметок).
+
+### 3. Структура заметки
+```go
+// internal/note/note.go
+type Note struct {
+	ID       int    `json:"id"`
+	Title    string `json:"title"`
+	Login    string `json:"login"`
+	Pass     string `json:"pass"`     // Зашифрованный пароль в hex
+	Favorite bool   `json:"favorite"`
+}
+```
+Основные методы:
+
+- EncryptPassword() — шифрует пароль
+- DecryptPassword() — расшифровывает пароль
+- EncryptTitle() / DecryptTitle() — шифрование заголовка
+- SetEncryptionKey() — установка глобального ключа
+
+
 
 ---
 
@@ -149,27 +201,3 @@ type Note struct {
 - Все пароли хранятся в зашифрованном виде (AES-256).
 - Мастер-пароль и ключ находятся только в `.env` файле, не загружаются в репозиторий.
 - Ввод пароля всегда маскируется.
-
----
-
-## 📚 Возможности для развития
-
-- Сохранение заметок в файл (например, JSON или SQLite).
-- Поддержка категорий и поиска.
-- GUI-интерфейс (например, на TUI или с Qt).
-- Ведение истории изменений.
-
----
-
-## 🧑‍💻 Автор
-
-Создан в рамках личного обучения и практики на языке **Go**.  
-Проект реализует безопасный подход к управлению логинами и паролями без использования внешних баз данных.
-
----
-
-## 🚀 Планы на будущее
-
-- [ ] 📦 Подготовить `.exe` файл для скачивания и удобного запуска
-
----
